@@ -30,6 +30,19 @@ export namespace EditorCommands {
         id: 'textEditor.commands.indentUsingTabs',
         label: 'Indent Using Tabs'
     };
+
+    /**
+     * Command for going back to the last editor navigation location.
+     */
+    export const BACK: Command = {
+        id: 'textEditor.commands.back',
+    };
+    /**
+     * Command for going to the forthcoming editor navigation location.
+     */
+    export const FORWARD: Command = {
+        id: 'textEditor.commands.forward'
+    };
 }
 
 @injectable()
@@ -40,5 +53,8 @@ export class EditorCommandContribution implements CommandContribution {
         registry.registerCommand(EditorCommands.CONFIG_INDENTATION);
         registry.registerCommand(EditorCommands.INDENT_USING_SPACES);
         registry.registerCommand(EditorCommands.INDENT_USING_TABS);
+
+        registry.registerCommand(EditorCommands.BACK);
+        registry.registerCommand(EditorCommands.FORWARD);
     }
 }
