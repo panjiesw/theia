@@ -8,9 +8,10 @@
 import * as bunyan from 'bunyan';
 import * as yargs from 'yargs';
 import { inject, injectable } from 'inversify';
-import { LogLevel } from '../common/logger';
-import { ILoggerServer, ILoggerClient, LoggerServerOptions } from '../common/logger-protocol';
+import { LogLevel, rootLoggerName } from '../common/logger';
+import { ILoggerServer, ILoggerClient, LoggerServerOptions, LoggerInfo, ILogLevelChangedEvent } from '../common/logger-protocol';
 import { CliContribution } from './cli';
+import { LoggerWatcher } from '../common/logger-watcher';
 
 @injectable()
 export class LogLevelCliContribution implements CliContribution {
@@ -34,42 +35,45 @@ export class LogLevelCliContribution implements CliContribution {
 export class BunyanLoggerServer implements ILoggerServer {
 
     /* Root logger and all child logger array.  */
-    private loggers = new Map<number, bunyan>();
-
-    /* ID counter for the children.  */
-    private currentId = 0;
+    private loggers = new Map<string, bunyan>();
 
     /* Logger client to send notifications to.  */
     private client: ILoggerClient | undefined = undefined;
 
-    /* Default log level.  */
-    private logLevel: number = LogLevel.INFO;
+    constructor(
+        @inject(LoggerServerOptions) options: object,
+        @inject(LoggerWatcher) protected watcher: LoggerWatcher,
+    ) {
+        const opts: bunyan.LoggerOptions = <bunyan.LoggerOptions>options;
+        opts['logger'] = rootLoggerName;
 
-    /* Root logger id.  */
-    private readonly rootLoggerId = 0;
-
-    constructor( @inject(LoggerServerOptions) options: object) {
-        this.loggers.set(this.currentId++, bunyan.createLogger(
-            <bunyan.LoggerOptions>options
-        ));
+        this.loggers.set(rootLoggerName,
+            bunyan.createLogger(opts));
     }
 
     dispose(): void {
         // no-op
     }
 
-    /* See the bunyan child documentation, this creates a child logger
-     * with the added properties of object in param.  */
-    child(obj: Object): Promise<number> {
-        const rootLogger = this.loggers.get(this.rootLoggerId);
-        if (rootLogger !== undefined) {
-            const id = this.currentId;
-            this.loggers.set(id, rootLogger.child(obj));
-            this.currentId++;
-            return Promise.resolve(id);
-        } else {
-            throw new Error('No root logger');
+    /* Create a logger child of the root logger.  See the bunyan child
+     * documentation.  */
+    child(name: string): Promise<void> {
+        if (name.length === 0) {
+            return Promise.reject("Can't create a logger with an empty name.");
         }
+
+        if (this.loggers.has(name)) {
+            /* Logger already exists.  */
+            return Promise.resolve();
+        }
+
+        const rootLogger = this.loggers.get(rootLoggerName);
+        if (rootLogger === undefined) {
+            throw new Error('No root logger.');
+        }
+
+        this.loggers.set(name, rootLogger.child({ 'logger': name }));
+        return Promise.resolve();
     }
 
     /* Set the client to receive notifications on.  */
@@ -78,28 +82,41 @@ export class BunyanLoggerServer implements ILoggerServer {
     }
 
     /* Set the log level for a logger.  */
-    setLogLevel(id: number, logLevel: number): Promise<void> {
-        const oldLogLevel = this.logLevel;
-        const logger = this.loggers.get(id);
+    setLogLevel(name: string, logLevel: number): Promise<void> {
+        const logger = this.loggers.get(name);
         if (logger === undefined) {
-            throw new Error(`No logger for id: ${id}`);
+            throw new Error(`No logger named ${name}.`);
+        }
+
+        const oldLogLevel = this.toLogLevel(logger.level());
+        if (oldLogLevel === logLevel) {
+            return Promise.resolve();
         }
 
         logger.level(this.toBunyanLevel(logLevel));
-        this.logLevel = logLevel;
 
-        /* Only notify about the root logger level changes.  */
-        if (this.client !== undefined && id === this.rootLoggerId) {
-            this.client.onLogLevelChanged({ oldLogLevel: oldLogLevel, newLogLevel: this.logLevel });
+        const changedEvent: ILogLevelChangedEvent = {
+            loggerName: name,
+            oldLogLevel: oldLogLevel,
+            newLogLevel: logLevel,
+        };
+
+        /* Notify the frontend.  */
+        if (this.client !== undefined) {
+            this.client.onLogLevelChanged(changedEvent);
         }
+
+        /* Notify the backend.  */
+        this.watcher.logLevelChanged(changedEvent);
+
         return Promise.resolve();
     }
 
     /* Get the log level for a logger.  */
-    getLogLevel(id: number): Promise<number> {
-        const logger = this.loggers.get(id);
+    getLogLevel(name: string): Promise<number> {
+        const logger = this.loggers.get(name);
         if (logger === undefined) {
-            throw new Error(`No logger for id: ${id}`);
+            throw new Error(`No logger named ${name}.`);
         }
 
         return Promise.resolve(
@@ -108,10 +125,10 @@ export class BunyanLoggerServer implements ILoggerServer {
     }
 
     /* Log a message to a logger.  */
-    log(id: number, logLevel: number, message: string, params: any[]): Promise<void> {
-        const logger = this.loggers.get(id);
+    log(name: string, logLevel: number, message: string, params: any[]): Promise<void> {
+        const logger = this.loggers.get(name);
         if (logger === undefined) {
-            throw new Error(`No logger for id: ${id}`);
+            throw new Error(`No logger named ${name}.`);
         }
 
         switch (logLevel) {
@@ -179,4 +196,16 @@ export class BunyanLoggerServer implements ILoggerServer {
         }
     }
 
+    getLoggers(): Promise<LoggerInfo[]> {
+        const ret: LoggerInfo[] = [];
+
+        this.loggers.forEach((logger, name) => {
+            ret.push({
+                name: name,
+                level: logger.level(),
+            });
+        });
+
+        return Promise.resolve(ret);
+    }
 }
