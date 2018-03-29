@@ -29,17 +29,31 @@ export class QuickFileOpenService implements QuickOpenModel {
     }
 
     private wsRoot: FileStat | undefined;
+    private showIgnored: boolean = false;
 
     isEnabled(): boolean {
         return this.wsRoot !== undefined;
     }
+    showAll(): boolean {
+        return this.showIgnored;
+    }
 
     open(): void {
+        let placeholderText = "";
+        if (this.showAll()) {
+            placeholderText = 'file name to search Press "CTRL + p" to hide .gitignore files';
+        } else {
+            placeholderText = 'file name to search Press "CTRL + p" to show .gitignore files';
+        }
+        this.showIgnored = !this.showAll();
         this.quickOpenService.open(this, {
-            placeholder: 'file name to search',
+            placeholder: placeholderText,
             fuzzyMatchLabel: true,
             fuzzyMatchDescription: true,
-            fuzzySort: true
+            fuzzySort: true,
+            onClose: () => {
+                this.showIgnored = false;
+            }
         });
     }
 
@@ -65,7 +79,7 @@ export class QuickFileOpenService implements QuickOpenModel {
                 acceptor(await Promise.all(itemPromises));
             }
         };
-        this.fileSearchService.find(lookFor, { rootUri, fuzzyMatch: true, limit: 200 }, token).then(handler);
+        this.fileSearchService.find(lookFor, { rootUri, fuzzyMatch: true, limit: 200, useGitIgnore: !this.showAll() }, token).then(handler);
     }
 
     private async toItem(uriString: string) {

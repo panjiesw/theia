@@ -26,6 +26,7 @@ export class MonacoQuickOpenService extends QuickOpenService {
     protected _widget: monaco.quickOpen.QuickOpenWidget | undefined;
     protected opts: MonacoQuickOpenControllerOpts | undefined;
     protected previousActiveElement: Element | undefined;
+    private lookingFor: string = "";
 
     constructor(@inject(ILogger) protected readonly logger: ILogger) {
         super();
@@ -41,7 +42,17 @@ export class MonacoQuickOpenService extends QuickOpenService {
     }
 
     open(model: QuickOpenModel, options?: QuickOpenOptions): void {
-        this.internalOpen(new MonacoQuickOpenControllerOptsImpl(model, options));
+        console.log("--JB OPEN MONACO model: " + model + "\t options: ", options + "\t lookingFor: " + this.lookingFor);
+        if (this.lookingFor.length === 0) {
+            this.internalOpen(new MonacoQuickOpenControllerOptsImpl(model, options));
+        } else {
+            console.log("--JB already open inputarial: " + (options !== undefined && QuickOpenOptions.resolve(options).placeholder));
+            //  if (options !== undefined) {
+            //      this.opts = QuickOpenOptions.resolve(options);
+            //  }
+            this.onType(this.lookingFor || '');
+        }
+        // this.internalOpen(new MonacoQuickOpenControllerOptsImpl(model, options));
     }
 
     internalOpen(opts: MonacoQuickOpenControllerOpts): void {
@@ -66,6 +77,10 @@ export class MonacoQuickOpenService extends QuickOpenService {
                 this.onClose(true);
             },
             onType: lookFor => this.onType(lookFor || ''),
+            // onType: lookFor => {
+            //     console.log("=======JB MONACO look for : " + lookFor + " =======");
+            //     this.onType(lookFor || '');
+            // },
             onFocusLost: () => false
         }, {});
         this.attachQuickOpenStyler();
@@ -89,15 +104,35 @@ export class MonacoQuickOpenService extends QuickOpenService {
     protected onClose(cancelled: boolean): void {
         if (this.opts && this.opts.onClose) {
             this.opts.onClose(cancelled);
+            this.lookingFor = "";
         }
     }
 
     protected async onType(lookFor: string): Promise<void> {
         const opts = this.opts;
+        // jb begin
+        console.log("--JBJB-- in monaco .onType() ===================lookFor:" + lookFor);
+        this.lookingFor = lookFor;
+        // if (lookFor.length > 0) {
+        //     console.log("========JJBB MONACO previous lookingFor: " + this.lookingFor);
+        //     this.lookingFor = lookFor;
+        // }
+        // jb end
         if (this.widget && opts) {
             if (opts.onType) {
+                // opts.onType(lookFor, model =>
+                //     this.widget.setInput(model, opts.getAutoFocus(lookFor), opts.inputAriaLabel));
+
+                if (this.lookingFor.length > 0) {
+                    lookFor = this.lookingFor;
+                }
                 opts.onType(lookFor, model =>
                     this.widget.setInput(model, opts.getAutoFocus(lookFor), opts.inputAriaLabel));
+
+                // opts.onType(lookFor, model => {
+                //     console.log("--JB MONACO ONTYPE MOdel id: ", model.dataSource + "\t lookfor: " + lookFor);
+                //     this.widget.setInput(model, opts.getAutoFocus(lookFor), opts.inputAriaLabel);
+                // });
             } else {
                 const m = opts.getModel(lookFor);
                 this.widget.setInput(m, opts.getAutoFocus(lookFor), opts.inputAriaLabel);
@@ -151,6 +186,7 @@ export class MonacoQuickOpenControllerOptsImpl implements MonacoQuickOpenControl
 
     onType(lookFor: string, acceptor: (model: monaco.quickOpen.QuickOpenModel) => void): void {
         this.model.onType(lookFor, items => {
+            console.log("__JBV monaco ontype lookfor: " + lookFor + " =====");
             const result = this.toOpenModel(lookFor, items);
             acceptor(result);
         });

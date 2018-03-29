@@ -32,11 +32,13 @@ export class FileSearchServiceImpl implements FileSearchService {
             ],
             ...options
         };
-        const args: string[] = [
+        let args: string[] = [
             '--files',
             '--sort-files',
-            '-u',
         ];
+        if (options.useGitIgnore) {
+            args = args.concat('-u');
+        }
         const process = this.rawProcessFactory({
             command: rgPath,
             args,
