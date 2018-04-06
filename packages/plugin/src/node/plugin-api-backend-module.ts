@@ -16,12 +16,14 @@ import { PluginApiContribution, HostedPluginServerImpl } from './plugin-service'
 import { HostedPluginReader } from './plugin-reader';
 import { HostedPluginClient, HostedPluginServer, hostedServicePath } from '../common/plugin-protocol';
 import { HostedPluginSupport } from './hosted-plugin';
+import { HostedPluginRunner } from './hosted-plugin-runner';
 
 export default new ContainerModule(bind => {
     bind(PluginApiContribution).toSelf().inSingletonScope();
     bind(HostedPluginReader).toSelf().inSingletonScope();
     bind(HostedPluginServer).to(HostedPluginServerImpl).inSingletonScope();
     bind(HostedPluginSupport).toSelf().inSingletonScope();
+    bind(HostedPluginRunner).toSelf().inSingletonScope();
 
     bind(BackendApplicationContribution).toDynamicValue(ctx => ctx.container.get(PluginApiContribution)).inSingletonScope();
     bind(BackendApplicationContribution).toDynamicValue(ctx => ctx.container.get(HostedPluginReader)).inSingletonScope();

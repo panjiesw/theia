@@ -3,7 +3,8 @@
   "version": "0.3.8",
   "description": "Theia - Plugin API",
   "dependencies": {
-    "@theia/core": "^0.3.8"
+    "@theia/core": "^0.3.8",
+    "@theia/filesystem": "^0.3.8"
   },
   "publishConfig": {
     "access": "public"
